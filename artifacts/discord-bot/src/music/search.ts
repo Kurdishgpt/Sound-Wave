@@ -1,7 +1,12 @@
 import play from 'play-dl';
-import ytdl from '@distube/ytdl-core';
+import { spawn } from 'child_process';
 import { StreamType } from '@discordjs/voice';
+import { createRequire } from 'module';
 import type { Track } from '../types.js';
+
+const require = createRequire(import.meta.url);
+// Resolve the yt-dlp binary path via yt-dlp-exec's constants module
+const { YOUTUBE_DL_PATH } = require('yt-dlp-exec/src/constants') as { YOUTUBE_DL_PATH: string };
 
 function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -142,11 +147,21 @@ export async function getSuggestions(track: Track): Promise<Track[]> {
   return searchTracks(query, 5);
 }
 
-export async function getAudioStream(url: string) {
-  const stream = ytdl(url, {
-    filter: 'audioonly',
-    quality: 'highestaudio',
-    highWaterMark: 1 << 25, // 32 MB buffer
+export function getAudioStream(url: string) {
+  // yt-dlp pipes raw audio (opus/webm) into stdout, which @discordjs/voice reads directly.
+  const proc = spawn(YOUTUBE_DL_PATH, [
+    url,
+    '--no-playlist',
+    '-f', 'bestaudio[ext=webm]/bestaudio/best',
+    '--no-warnings',
+    '-o', '-',          // output to stdout
+    '--quiet',
+  ]);
+
+  proc.stderr.on('data', (d: Buffer) => {
+    const msg = d.toString().trim();
+    if (msg) console.error('[yt-dlp]', msg);
   });
-  return { stream, type: StreamType.Arbitrary };
+
+  return { stream: proc.stdout, type: StreamType.Arbitrary };
 }
