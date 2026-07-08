@@ -1,13 +1,14 @@
 import {
   type Interaction,
   type ChatInputCommandInteraction,
+  type MessageContextMenuCommandInteraction,
   type ButtonInteraction,
   type StringSelectMenuInteraction,
   type AutocompleteInteraction,
   type VoiceChannel,
   GuildMember,
 } from 'discord.js';
-import { commands } from '../commands/index.js';
+import { commands, type ContextMenuCommand, type SlashCommand } from '../commands/index.js';
 import { getPlayer } from '../music/PlayerManager.js';
 import { buildNowPlayingEmbed, buildQueueEmbed } from '../utils/embeds.js';
 import { buildControlRows, buildSuggestionSelect } from '../utils/components.js';
@@ -29,6 +30,8 @@ export async function onInteractionCreate(interaction: Interaction): Promise<voi
       await handleAutocomplete(interaction);
     } else if (interaction.isChatInputCommand()) {
       await handleCommand(interaction);
+    } else if (interaction.isMessageContextMenuCommand()) {
+      await handleContextMenu(interaction);
     } else if (interaction.isButton()) {
       await handleButton(interaction);
     } else if (interaction.isStringSelectMenu()) {
@@ -41,15 +44,36 @@ export async function onInteractionCreate(interaction: Interaction): Promise<voi
 
 // ─── handlers ─────────────────────────────────────────────────────────────────
 
+async function handleContextMenu(interaction: MessageContextMenuCommandInteraction): Promise<void> {
+  const cmd = commands.find(
+    c => c.kind === 'contextMenu' && c.data.name === interaction.commandName,
+  ) as ContextMenuCommand | undefined;
+  if (!cmd) {
+    await interaction.reply({ content: '❌ Unknown command.', ephemeral: true });
+    return;
+  }
+  try {
+    await cmd.execute(interaction);
+  } catch (err) {
+    console.error(`[ContextMenu] ${interaction.commandName}:`, err);
+    const msg = { content: '❌ An error occurred.', ephemeral: true };
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply(msg).catch(() => null);
+    } else {
+      await interaction.reply(msg).catch(() => null);
+    }
+  }
+}
+
 async function handleAutocomplete(interaction: AutocompleteInteraction): Promise<void> {
-  const cmd = commands.find(c => c.data.name === interaction.commandName);
+  const cmd = commands.find(c => c.kind === 'slash' && c.data.name === interaction.commandName) as SlashCommand | undefined;
   if (cmd?.autocomplete) {
     await cmd.autocomplete(interaction).catch(() => interaction.respond([]));
   }
 }
 
 async function handleCommand(interaction: ChatInputCommandInteraction): Promise<void> {
-  const cmd = commands.find(c => c.data.name === interaction.commandName);
+  const cmd = commands.find(c => c.kind === 'slash' && c.data.name === interaction.commandName) as SlashCommand | undefined;
   if (!cmd) {
     await interaction.reply({ content: '❌ Unknown command.', ephemeral: true });
     return;

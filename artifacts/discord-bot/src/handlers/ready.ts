@@ -16,9 +16,12 @@ export async function onReady(client: Client): Promise<void> {
 
   try {
     const rest = new REST().setToken(token);
+    // toJSON() works for both SlashCommandBuilder and ContextMenuCommandBuilder
     const body = commands.map(c => c.data.toJSON());
     await rest.put(Routes.applicationCommands(clientId), { body });
-    console.log(`[Bot] Registered ${body.length} slash command(s) globally`);
+    const slashCount = commands.filter(c => c.kind === 'slash').length;
+    const menuCount = commands.filter(c => c.kind === 'contextMenu').length;
+    console.log(`[Bot] Registered ${slashCount} slash + ${menuCount} context-menu command(s) globally`);
   } catch (err) {
     console.error('[Bot] Failed to register commands:', err);
   }
