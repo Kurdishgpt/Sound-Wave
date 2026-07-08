@@ -1,4 +1,6 @@
 import play from 'play-dl';
+import ytdl from '@distube/ytdl-core';
+import { StreamType } from '@discordjs/voice';
 import type { Track } from '../types.js';
 
 function formatDuration(seconds: number): string {
@@ -141,5 +143,10 @@ export async function getSuggestions(track: Track): Promise<Track[]> {
 }
 
 export async function getAudioStream(url: string) {
-  return play.stream(url, { quality: 2 });
+  const stream = ytdl(url, {
+    filter: 'audioonly',
+    quality: 'highestaudio',
+    highWaterMark: 1 << 25, // 32 MB buffer
+  });
+  return { stream, type: StreamType.Arbitrary };
 }
