@@ -6,6 +6,7 @@ import type {
   ContextMenuCommandBuilder,
 } from 'discord.js';
 import * as playContextCmd from './playContext.js';
+import * as playCmd from './play.js';
 import * as queueCmd from './queue.js';
 import {
   skipData, skipExecute,
@@ -34,7 +35,7 @@ export interface ContextMenuCommand {
 export type Command = SlashCommand | ContextMenuCommand;
 
 export const commands: Command[] = [
-  // ── Message context menu (replaces /play) ──────────────────────────────────
+  // ── Message context menu ───────────────────────────────────────────────────
   {
     kind: 'contextMenu',
     data: playContextCmd.data as unknown as ContextMenuCommandBuilder,
@@ -42,6 +43,7 @@ export const commands: Command[] = [
   },
 
   // ── Slash commands ──────────────────────────────────────────────────────────
+  { kind: 'slash', data: playCmd.data as unknown as SlashCommandBuilder, execute: playCmd.execute, autocomplete: playCmd.autocomplete },
   { kind: 'slash', data: queueCmd.data as unknown as SlashCommandBuilder, execute: queueCmd.execute },
   { kind: 'slash', data: skipData as unknown as SlashCommandBuilder, execute: skipExecute },
   { kind: 'slash', data: stopData as unknown as SlashCommandBuilder, execute: stopExecute },
