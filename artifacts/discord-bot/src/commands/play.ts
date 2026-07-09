@@ -26,11 +26,18 @@ export const data = new SlashCommandBuilder()
 export async function autocomplete(interaction: AutocompleteInteraction): Promise<void> {
   const focused = interaction.options.getFocused();
   if (!focused || focused.length < 2) {
-    await interaction.respond([]);
+    await interaction.respond([]).catch(() => null);
     return;
   }
   try {
-    const results = await searchTracks(focused, 5);
+    // Discord discards autocomplete interactions after ~3s (error 10062 "Unknown
+    // interaction" if we respond late). play-dl's search can occasionally hang on
+    // a slow network round-trip, so race it against a hard timeout and bail with
+    // an empty list rather than risk throwing on a dead interaction.
+    const results = await Promise.race([
+      searchTracks(focused, 5),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('autocomplete timeout')), 2500)),
+    ]);
     await interaction.respond(
       results.map(t => ({
         name: `${t.title}${t.artist ? ` — ${t.artist}` : ''} [${t.durationFormatted}]`.slice(
@@ -41,7 +48,8 @@ export async function autocomplete(interaction: AutocompleteInteraction): Promis
       })),
     );
   } catch {
-    await interaction.respond([]);
+    // Interaction may already be expired at this point (10062) — swallow, don't crash.
+    await interaction.respond([]).catch(() => null);
   }
 }
 

@@ -68,7 +68,10 @@ async function handleContextMenu(interaction: MessageContextMenuCommandInteracti
 async function handleAutocomplete(interaction: AutocompleteInteraction): Promise<void> {
   const cmd = commands.find(c => c.kind === 'slash' && c.data.name === interaction.commandName) as SlashCommand | undefined;
   if (cmd?.autocomplete) {
-    await cmd.autocomplete(interaction).catch(() => interaction.respond([]));
+    // The interaction may already be expired (10062) by the time we get here — the
+    // fallback respond() can itself throw, so swallow that too instead of letting
+    // it surface as an unhandled rejection.
+    await cmd.autocomplete(interaction).catch(() => interaction.respond([]).catch(() => null));
   }
 }
 
