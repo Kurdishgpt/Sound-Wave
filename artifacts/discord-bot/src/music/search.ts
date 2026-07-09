@@ -1,7 +1,8 @@
 import play from 'play-dl';
-import { spawn } from 'child_process';
+import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { StreamType } from '@discordjs/voice';
 import { createRequire } from 'module';
+import type { Readable } from 'stream';
 import type { Track } from '../types.js';
 
 const require = createRequire(import.meta.url);
@@ -147,21 +148,31 @@ export async function getSuggestions(track: Track): Promise<Track[]> {
   return searchTracks(query, 5);
 }
 
-export function getAudioStream(url: string) {
-  // yt-dlp pipes raw audio (opus/webm) into stdout, which @discordjs/voice reads directly.
+export function getAudioStream(url: string): { stream: Readable; type: StreamType; process: ChildProcessWithoutNullStreams } {
+  // Strictly request WebM/Opus — @discordjs/voice decodes this natively (no ffmpeg needed).
+  // No generic "bestaudio" fallback: a non-WebM/Opus fallback would silently mismatch the
+  // declared StreamType.WebmOpus and fail to decode.
   const proc = spawn(YOUTUBE_DL_PATH, [
     url,
     '--no-playlist',
-    '-f', 'bestaudio[ext=webm]/bestaudio/best',
+    '-f', 'bestaudio[ext=webm][acodec=opus]/bestaudio[acodec=opus]',
     '--no-warnings',
-    '-o', '-',          // output to stdout
+    '-o', '-',   // pipe to stdout
     '--quiet',
   ]);
 
-  proc.stderr.on('data', (d: Buffer) => {
-    const msg = d.toString().trim();
-    if (msg) console.error('[yt-dlp]', msg);
+  proc.on('error', (err) => {
+    console.error('[yt-dlp] Failed to spawn process:', err.message);
   });
 
-  return { stream: proc.stdout, type: StreamType.Arbitrary };
+  proc.stderr.on('data', (d: Buffer) => {
+    const msg = d.toString().trim();
+    // Broken pipe is expected when the user skips / stops — suppress it.
+    if (msg && !msg.includes('Broken pipe')) console.error('[yt-dlp]', msg);
+  });
+
+  // Silence EPIPE on the readable side as well (expected on manual stop/skip).
+  proc.stdout.on('error', () => {});
+
+  return { stream: proc.stdout, type: StreamType.WebmOpus, process: proc };
 }

@@ -33,6 +33,10 @@ export class MusicPlayer {
   private readonly guildId: string;
   /** Set to true before a manual stop() to prevent the Idle handler re-advancing the queue. */
   private manualStop = false;
+  /** Active yt-dlp child process — killed on skip/stop to avoid broken pipe errors. */
+  private ytdlpProcess: ReturnType<typeof import('child_process').spawn> | null = null;
+  /** Monotonic counter guarding against stale async playTrack() completions overriding newer playback. */
+  private playGeneration = 0;
 
   constructor(guildId: string) {
     this.guildId = guildId;
@@ -72,9 +76,20 @@ export class MusicPlayer {
   // ── private helpers ────────────────────────────────────────────────────────
 
   private async playTrack(track: Track): Promise<void> {
+    const generation = ++this.playGeneration;
     try {
       this.currentTrack = track;
-      const stream = await getAudioStream(track.url);
+      const stream = getAudioStream(track.url);
+
+      // A newer playTrack() call (skip/previous/auto-advance) started while we were
+      // setting up this stream — discard this one instead of clobbering the newer state.
+      if (generation !== this.playGeneration) {
+        stream.process.kill('SIGKILL');
+        return;
+      }
+
+      this.killYtdlp();
+      this.ytdlpProcess = stream.process;
       this.resource = createAudioResource(stream.stream, {
         inputType: stream.type,
         inlineVolume: true,
@@ -82,10 +97,18 @@ export class MusicPlayer {
       this.applyVolume();
       this.player.play(this.resource);
     } catch (err) {
+      if (generation !== this.playGeneration) return; // superseded — ignore
       console.error('[MusicPlayer] Failed to play track:', err);
       this.currentTrack = null;
       this.advanceQueue();
     }
+  }
+
+  private killYtdlp(): void {
+    if (this.ytdlpProcess && !this.ytdlpProcess.killed) {
+      this.ytdlpProcess.kill('SIGKILL');
+    }
+    this.ytdlpProcess = null;
   }
 
   private applyVolume(): void {
@@ -165,6 +188,7 @@ export class MusicPlayer {
   skip(): void {
     // Just stop; the Idle event handler does the history/queue mutation and advance.
     this.player.stop();
+    this.killYtdlp();
   }
 
   hasPrevious(): boolean {
@@ -179,6 +203,7 @@ export class MusicPlayer {
     // Prevent the Idle handler from re-advancing when we call stop(true).
     this.manualStop = true;
     this.player.stop(true);
+    this.killYtdlp();
     this.playTrack(prev).then(() => this.refreshMessage());
   }
 
@@ -187,6 +212,7 @@ export class MusicPlayer {
     this.currentTrack = null;
     this.manualStop = true;
     this.player.stop(true);
+    this.killYtdlp();
     this.refreshMessage();
   }
 
@@ -263,6 +289,7 @@ export class MusicPlayer {
   destroy(): void {
     this.manualStop = true;
     this.player.stop(true);
+    this.killYtdlp();
     const conn = getVoiceConnection(this.guildId);
     conn?.destroy();
     this.connection = null;
