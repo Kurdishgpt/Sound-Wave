@@ -5,6 +5,7 @@ import {
   type VoiceChannel,
   GuildMember,
   EmbedBuilder,
+  MessageFlags,
 } from 'discord.js';
 import { getPlayer } from '../music/PlayerManager.js';
 import { resolveUrl, searchByQuery } from '../music/search.js';
@@ -24,7 +25,7 @@ export async function execute(interaction: MessageContextMenuCommandInteraction)
   const voiceChannel = member?.voice.channel as VoiceChannel | null;
 
   if (!voiceChannel) {
-    await interaction.reply({ content: '❌ Join a voice channel first!', ephemeral: true });
+    await interaction.reply({ content: '❌ Join a voice channel first!', flags: MessageFlags.Ephemeral });
     return;
   }
 

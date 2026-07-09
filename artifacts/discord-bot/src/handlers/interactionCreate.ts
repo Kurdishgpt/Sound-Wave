@@ -7,6 +7,7 @@ import {
   type AutocompleteInteraction,
   type VoiceChannel,
   GuildMember,
+  MessageFlags,
 } from 'discord.js';
 import { commands, type ContextMenuCommand, type SlashCommand } from '../commands/index.js';
 import { getPlayer } from '../music/PlayerManager.js';
@@ -49,18 +50,18 @@ async function handleContextMenu(interaction: MessageContextMenuCommandInteracti
     c => c.kind === 'contextMenu' && c.data.name === interaction.commandName,
   ) as ContextMenuCommand | undefined;
   if (!cmd) {
-    await interaction.reply({ content: '❌ Unknown command.', ephemeral: true });
+    await interaction.reply({ content: '❌ Unknown command.', flags: MessageFlags.Ephemeral });
     return;
   }
   try {
     await cmd.execute(interaction);
   } catch (err) {
     console.error(`[ContextMenu] ${interaction.commandName}:`, err);
-    const msg = { content: '❌ An error occurred.', ephemeral: true };
+    const content = '❌ An error occurred.';
     if (interaction.deferred || interaction.replied) {
-      await interaction.editReply(msg).catch(() => null);
+      await interaction.editReply({ content }).catch(() => null);
     } else {
-      await interaction.reply(msg).catch(() => null);
+      await interaction.reply({ content, flags: MessageFlags.Ephemeral }).catch(() => null);
     }
   }
 }
@@ -78,18 +79,18 @@ async function handleAutocomplete(interaction: AutocompleteInteraction): Promise
 async function handleCommand(interaction: ChatInputCommandInteraction): Promise<void> {
   const cmd = commands.find(c => c.kind === 'slash' && c.data.name === interaction.commandName) as SlashCommand | undefined;
   if (!cmd) {
-    await interaction.reply({ content: '❌ Unknown command.', ephemeral: true });
+    await interaction.reply({ content: '❌ Unknown command.', flags: MessageFlags.Ephemeral });
     return;
   }
   try {
     await cmd.execute(interaction);
   } catch (err) {
     console.error(`[Command] /${interaction.commandName}:`, err);
-    const msg = { content: '❌ An error occurred.', ephemeral: true };
+    const content = '❌ An error occurred.';
     if (interaction.deferred || interaction.replied) {
-      await interaction.editReply(msg).catch(() => null);
+      await interaction.editReply({ content }).catch(() => null);
     } else {
-      await interaction.reply(msg).catch(() => null);
+      await interaction.reply({ content, flags: MessageFlags.Ephemeral }).catch(() => null);
     }
   }
 }
@@ -102,7 +103,7 @@ async function handleButton(interaction: ButtonInteraction): Promise<void> {
 
   // Auth: user must be in a voice channel; if bot is active they should be in the same one
   if (!memberVoice) {
-    await interaction.reply({ content: '❌ Join a voice channel first!', ephemeral: true });
+    await interaction.reply({ content: '❌ Join a voice channel first!', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -110,35 +111,35 @@ async function handleButton(interaction: ButtonInteraction): Promise<void> {
     switch (interaction.customId) {
       case 'music_pause': {
         const ok = player.pause();
-        await interaction.reply({ content: ok ? '⏸ Paused.' : '❌ Not currently playing.', ephemeral: true });
+        await interaction.reply({ content: ok ? '⏸ Paused.' : '❌ Not currently playing.', flags: MessageFlags.Ephemeral });
         if (ok) await player.refreshMessage();
         break;
       }
 
       case 'music_resume': {
         const ok = player.resume();
-        await interaction.reply({ content: ok ? '▶️ Resumed.' : '❌ Not paused.', ephemeral: true });
+        await interaction.reply({ content: ok ? '▶️ Resumed.' : '❌ Not paused.', flags: MessageFlags.Ephemeral });
         if (ok) await player.refreshMessage();
         break;
       }
 
       case 'music_skip': {
         if (!player.isActive()) {
-          await interaction.reply({ content: '❌ Nothing is playing.', ephemeral: true });
+          await interaction.reply({ content: '❌ Nothing is playing.', flags: MessageFlags.Ephemeral });
           break;
         }
         player.skip();
-        await interaction.reply({ content: '⏭ Skipped!', ephemeral: true });
+        await interaction.reply({ content: '⏭ Skipped!', flags: MessageFlags.Ephemeral });
         break;
       }
 
       case 'music_prev': {
         if (!player.hasPrevious()) {
-          await interaction.reply({ content: '❌ No previous track.', ephemeral: true });
+          await interaction.reply({ content: '❌ No previous track.', flags: MessageFlags.Ephemeral });
           break;
         }
         player.previous();
-        await interaction.reply({ content: '⏮ Going back!', ephemeral: true });
+        await interaction.reply({ content: '⏮ Going back!', flags: MessageFlags.Ephemeral });
         break;
       }
 
@@ -149,21 +150,21 @@ async function handleButton(interaction: ButtonInteraction): Promise<void> {
           track: '🔂 Looping current track.',
           queue: '🔁 Looping entire queue.',
         };
-        await interaction.reply({ content: label[mode] ?? 'Loop updated.', ephemeral: true });
+        await interaction.reply({ content: label[mode] ?? 'Loop updated.', flags: MessageFlags.Ephemeral });
         await player.refreshMessage();
         break;
       }
 
       case 'music_vol_up': {
         player.adjustVolume(10);
-        await interaction.reply({ content: `🔊 Volume: **${player.volume}%**`, ephemeral: true });
+        await interaction.reply({ content: `🔊 Volume: **${player.volume}%**`, flags: MessageFlags.Ephemeral });
         await player.refreshMessage();
         break;
       }
 
       case 'music_vol_down': {
         player.adjustVolume(-10);
-        await interaction.reply({ content: `🔉 Volume: **${player.volume}%**`, ephemeral: true });
+        await interaction.reply({ content: `🔉 Volume: **${player.volume}%**`, flags: MessageFlags.Ephemeral });
         await player.refreshMessage();
         break;
       }
@@ -172,7 +173,7 @@ async function handleButton(interaction: ButtonInteraction): Promise<void> {
         player.toggleMute();
         await interaction.reply({
           content: player.muted ? '🔇 Muted.' : `🔈 Unmuted — ${player.volume}%.`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         await player.refreshMessage();
         break;
@@ -180,13 +181,13 @@ async function handleButton(interaction: ButtonInteraction): Promise<void> {
 
       case 'music_like': {
         if (!player.currentTrack) {
-          await interaction.reply({ content: '❌ Nothing is playing.', ephemeral: true });
+          await interaction.reply({ content: '❌ Nothing is playing.', flags: MessageFlags.Ephemeral });
           break;
         }
         const liked = player.toggleLike(player.currentTrack.url);
         await interaction.reply({
           content: liked ? '❤️ Added to liked songs!' : '💔 Removed from liked songs.',
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         await player.refreshMessage();
         break;
@@ -194,34 +195,34 @@ async function handleButton(interaction: ButtonInteraction): Promise<void> {
 
       case 'music_shuffle': {
         player.shuffle();
-        await interaction.reply({ content: '🔀 Queue shuffled!', ephemeral: true });
+        await interaction.reply({ content: '🔀 Queue shuffled!', flags: MessageFlags.Ephemeral });
         await player.refreshMessage();
         break;
       }
 
       case 'music_stop': {
         player.stop();
-        await interaction.reply({ content: '⏹ Stopped and cleared the queue.', ephemeral: true });
+        await interaction.reply({ content: '⏹ Stopped and cleared the queue.', flags: MessageFlags.Ephemeral });
         break;
       }
 
       case 'music_disconnect': {
         player.destroy();
-        await interaction.reply({ content: '👋 Disconnected.', ephemeral: true });
+        await interaction.reply({ content: '👋 Disconnected.', flags: MessageFlags.Ephemeral });
         break;
       }
 
       case 'music_queue_btn': {
-        await interaction.reply({ embeds: [buildQueueEmbed(player)], ephemeral: true });
+        await interaction.reply({ embeds: [buildQueueEmbed(player)], flags: MessageFlags.Ephemeral });
         break;
       }
 
       case 'music_suggest': {
         if (!player.currentTrack) {
-          await interaction.reply({ content: '❌ Nothing is playing.', ephemeral: true });
+          await interaction.reply({ content: '❌ Nothing is playing.', flags: MessageFlags.Ephemeral });
           break;
         }
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const suggestions = await getSuggestions(player.currentTrack);
         if (suggestions.length === 0) {
           await interaction.editReply({ content: '❌ Could not fetch suggestions right now.' });
@@ -235,15 +236,15 @@ async function handleButton(interaction: ButtonInteraction): Promise<void> {
       }
 
       default:
-        await interaction.reply({ content: '❓ Unknown action.', ephemeral: true });
+        await interaction.reply({ content: '❓ Unknown action.', flags: MessageFlags.Ephemeral });
     }
   } catch (err) {
     console.error(`[Button] ${interaction.customId}:`, err);
-    const msg = { content: '❌ Something went wrong.', ephemeral: true };
+    const content = '❌ Something went wrong.';
     if (interaction.deferred || interaction.replied) {
-      await interaction.editReply(msg).catch(() => null);
+      await interaction.editReply({ content }).catch(() => null);
     } else {
-      await interaction.reply(msg).catch(() => null);
+      await interaction.reply({ content, flags: MessageFlags.Ephemeral }).catch(() => null);
     }
   }
 }
@@ -254,12 +255,12 @@ async function handleSelect(interaction: StringSelectMenuInteraction): Promise<v
 
   const memberVoice = getMemberVoiceChannel(interaction);
   if (!memberVoice) {
-    await interaction.reply({ content: '❌ Join a voice channel first!', ephemeral: true });
+    await interaction.reply({ content: '❌ Join a voice channel first!', flags: MessageFlags.Ephemeral });
     return;
   }
 
   try {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const url = interaction.values[0];
     const track = await searchByQuery(url, interaction.user.id, interaction.user.username);
 
@@ -290,7 +291,7 @@ async function handleSelect(interaction: StringSelectMenuInteraction): Promise<v
     if (interaction.deferred || interaction.replied) {
       await interaction.editReply(msg).catch(() => null);
     } else {
-      await interaction.reply({ ...msg, ephemeral: true }).catch(() => null);
+      await interaction.reply({ ...msg, flags: MessageFlags.Ephemeral }).catch(() => null);
     }
   }
 }
