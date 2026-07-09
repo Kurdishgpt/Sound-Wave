@@ -90,12 +90,18 @@ export class MusicPlayer {
 
       this.killYtdlp();
       this.ytdlpProcess = stream.process;
+      stream.process.once('close', code => {
+        if (code !== 0 && code !== null) {
+          console.error(`[MusicPlayer] yt-dlp exited with code ${code} for "${track.title}"`);
+        }
+      });
       this.resource = createAudioResource(stream.stream, {
         inputType: stream.type,
         inlineVolume: true,
       });
       this.applyVolume();
       this.player.play(this.resource);
+      console.log(`[MusicPlayer] Now playing "${track.title}" (guild ${this.guildId})`);
     } catch (err) {
       if (generation !== this.playGeneration) return; // superseded — ignore
       console.error('[MusicPlayer] Failed to play track:', err);
@@ -153,6 +159,20 @@ export class MusicPlayer {
           this.destroy();
         }
       });
+
+      this.connection.on('error', err => {
+        console.error('[MusicPlayer] Voice connection error:', err.message);
+      });
+    }
+
+    // Wait until the connection is actually Ready before returning — otherwise
+    // player.play() can be called (and packets dropped) before the UDP/voice
+    // handshake finishes, causing silent "joins but no sound" behavior.
+    try {
+      await entersState(this.connection, VoiceConnectionStatus.Ready, 15_000);
+    } catch (err) {
+      console.error('[MusicPlayer] Voice connection failed to become ready:', err);
+      throw new Error('Failed to connect to the voice channel. Please try again.');
     }
 
     this.connection.subscribe(this.player);
