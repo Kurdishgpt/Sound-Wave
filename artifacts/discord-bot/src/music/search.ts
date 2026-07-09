@@ -155,7 +155,12 @@ export function getAudioStream(url: string): { stream: Readable; type: StreamTyp
   const proc = spawn(YOUTUBE_DL_PATH, [
     url,
     '--no-playlist',
-    '-f', 'bestaudio[ext=webm][acodec=opus]/bestaudio[acodec=opus]',
+    // YouTube now requires a PO token for most webm/opus and android/ios formats;
+    // without one they 403 or get skipped. Format 18 (muxed mp4/h264+aac) from the
+    // web client is still available without a PO token, so fall back to "best" and
+    // let ffmpeg (via @discordjs/voice's Arbitrary stream type) demux/transcode it.
+    '-f', 'bestaudio/best',
+    '--extractor-args', 'youtube:player_client=web,android,ios',
     '--no-warnings',
     '-o', '-',   // pipe to stdout
     '--quiet',
@@ -174,5 +179,5 @@ export function getAudioStream(url: string): { stream: Readable; type: StreamTyp
   // Silence EPIPE on the readable side as well (expected on manual stop/skip).
   proc.stdout.on('error', () => {});
 
-  return { stream: proc.stdout, type: StreamType.WebmOpus, process: proc };
+  return { stream: proc.stdout, type: StreamType.Arbitrary, process: proc };
 }
