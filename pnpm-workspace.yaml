@@ -74,6 +74,7 @@ onlyBuiltDependencies:
   - ffmpeg-static
   - msw
   - unrs-resolver
+  - yt-dlp-exec
 
 overrides:
   # replit uses linux-x64 only, we can exclude all other platforms
