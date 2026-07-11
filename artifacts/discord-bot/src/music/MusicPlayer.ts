@@ -163,6 +163,10 @@ export class MusicPlayer {
       this.connection.on('error', err => {
         console.error('[MusicPlayer] Voice connection error:', err.message);
       });
+
+      this.connection.on('stateChange', (oldState, newState) => {
+        console.log(`[MusicPlayer] Voice connection state: ${oldState.status} -> ${newState.status}`);
+      });
     }
 
     // Wait until the connection is actually Ready before returning — otherwise
