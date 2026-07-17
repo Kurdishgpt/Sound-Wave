@@ -1,6 +1,6 @@
 ---
 name: yt-dlp YouTube PO token / 403 issue
-description: YouTube blocks most yt-dlp audio formats on server IPs unless the android_vr client is used; bundled bin/yt-dlp defaults to android_vr which returns real opus formats without a PO token.
+description: YouTube blocks most yt-dlp audio formats on server IPs. Use bundled bin/yt-dlp (android_vr client) + cookies + StreamType.Arbitrary for reliable playback.
 ---
 
 ## Problem
@@ -9,22 +9,37 @@ on headless server IPs. Several client workarounds have been tried over time:
 
 - `tv_embedded,mweb` — **broken**: returns only storyboard formats (no audio) on this server IP
 - `web,android,ios` — **broken**: format 18 not available, others need PO token
-- `android_vr` — **works**: returns real opus formats (251/249 webm/opus) without a PO token
+- `android_vr` — **works for most videos**, but some trigger bot-check ("Sign in to confirm")
 
 ## Working fix (as of July 2026)
 Use the bundled `bin/yt-dlp` binary in `artifacts/discord-bot/bin/yt-dlp`.
-It defaults to `android_vr` client and returns formats 251 (opus 129k) and 249 (opus 46k).
+It defaults to `android_vr` client + cookies for bot-checked videos.
 
 Format selector: `251/249/bestaudio[ext=webm]/bestaudio`
-StreamType: `StreamType.WebmOpus` — @discordjs/voice decodes this natively, no ffmpeg needed.
+StreamType: **`StreamType.Arbitrary`** — routes through ffmpeg, handles webm/opus AND m4a
+fallbacks without silent failures. Do NOT use `StreamType.WebmOpus`: if yt-dlp falls
+back to m4a (format 140), the player fails instantly and "queue has ended" appears.
 
 **Do NOT pass `--extractor-args youtube:player_client=...`** when using the bundled binary —
 android_vr is the default and adding other clients breaks the format list.
 
-## Why the bundled binary
-The `yt-dlp-exec` npm package binary is the same version but its cached format selection
-and default client may differ. The bundled `bin/yt-dlp` has been tested to work on this
-server IP with android_vr. Both are version 2026.07.04.
+## ffmpeg setup
+ffmpeg-static is installed as a dependency. Set `FFMPEG_PATH` before @discordjs/voice
+loads prism-media — done at the top of `src/index.ts` via:
+```ts
+import { createRequire } from 'module';
+const _require = createRequire(import.meta.url);
+process.env.FFMPEG_PATH = _require('ffmpeg-static');
+```
+
+## Cookies (YOUTUBE_COOKIES secret)
+Some videos still require auth even with android_vr. Set `YOUTUBE_COOKIES` secret to
+the raw Netscape cookies.txt content (exported from browser via "Get cookies.txt LOCALLY"
+extension). The code also accepts base64-encoded content and auto-detects which was used.
+Cookie file is written to `/tmp/yt-cookies.txt` on startup.
+
+**Validation**: cookies file MUST start with `# Netscape HTTP Cookie File` or
+`# HTTP Cookie File` — anything else is rejected with a warning (not silently corrupt).
 
 ## How to apply
 If YouTube audio breaks again: test `bin/yt-dlp --list-formats <url>` with no

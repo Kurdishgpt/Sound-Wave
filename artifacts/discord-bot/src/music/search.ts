@@ -3,7 +3,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { StreamType } from '@discordjs/voice';
 import { fileURLToPath } from 'url';
 import { resolve, dirname } from 'path';
-import { writeFileSync, existsSync } from 'fs';
+import { writeFileSync } from 'fs';
 import type { Readable } from 'stream';
 import type { Track } from '../types.js';
 
@@ -13,16 +13,35 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const YOUTUBE_DL_PATH = resolve(__dirname, '../../bin/yt-dlp');
 
 // ── YouTube cookies ───────────────────────────────────────────────────────────
-// Some videos require authentication to bypass bot-detection. Set YOUTUBE_COOKIES
-// to a base64-encoded Netscape cookies.txt exported from your browser.
+// Set YOUTUBE_COOKIES to your Netscape cookies.txt content (raw or base64).
+// Export from Chrome/Firefox with the "Get cookies.txt LOCALLY" extension.
 const COOKIES_PATH = '/tmp/yt-cookies.txt';
+let cookiesReady = false;
 
 function initCookies(): void {
   const raw = process.env.YOUTUBE_COOKIES;
   if (!raw) return;
+
+  // Accept either raw Netscape cookies.txt OR base64-encoded content.
+  // Try base64 first; if the decoded result looks like a cookies file use it,
+  // otherwise fall back to treating the secret value as raw text.
+  let content = raw.trim();
+  if (!content.startsWith('#')) {
+    try {
+      const decoded = Buffer.from(content, 'base64').toString('utf-8');
+      if (decoded.startsWith('#')) content = decoded;
+    } catch { /* not base64 — use raw */ }
+  }
+
+  // Validate: must be a Netscape HTTP Cookie File
+  if (!content.startsWith('# Netscape HTTP Cookie File') && !content.startsWith('# HTTP Cookie File')) {
+    console.warn('[yt-dlp] YOUTUBE_COOKIES does not look like a valid Netscape cookies file — cookies disabled. Make sure you exported cookies.txt from your browser (not base64-encoded).');
+    return;
+  }
+
   try {
-    const decoded = Buffer.from(raw, 'base64').toString('utf-8');
-    writeFileSync(COOKIES_PATH, decoded, { mode: 0o600 });
+    writeFileSync(COOKIES_PATH, content, { mode: 0o600 });
+    cookiesReady = true;
     console.log('[yt-dlp] Cookies loaded from YOUTUBE_COOKIES secret');
   } catch (err) {
     console.warn('[yt-dlp] Failed to write cookies file:', (err as Error).message);
@@ -186,7 +205,7 @@ export function getAudioStream(url: string): { stream: Readable; type: StreamTyp
   ];
 
   // Pass cookies if available — required for videos that trigger bot-detection
-  if (existsSync(COOKIES_PATH)) {
+  if (cookiesReady) {
     args.splice(1, 0, '--cookies', COOKIES_PATH);
   }
 
@@ -205,5 +224,7 @@ export function getAudioStream(url: string): { stream: Readable; type: StreamTyp
   // Silence EPIPE on the readable side as well (expected on manual stop/skip).
   proc.stdout.on('error', () => {});
 
-  return { stream: proc.stdout, type: StreamType.WebmOpus, process: proc };
+  // StreamType.Arbitrary routes through ffmpeg — handles webm/opus, m4a, or
+  // any other format yt-dlp may return without silent playback failures.
+  return { stream: proc.stdout, type: StreamType.Arbitrary, process: proc };
 }
