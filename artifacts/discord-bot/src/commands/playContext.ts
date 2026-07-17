@@ -21,15 +21,17 @@ export const data = new ContextMenuCommandBuilder()
 const URL_RE = /https?:\/\/[^\s]+/i;
 
 export async function execute(interaction: MessageContextMenuCommandInteraction): Promise<void> {
+  // Defer immediately — Discord's 3-second acknowledgement window starts the
+  // moment the interaction arrives. Any work before deferReply risks 10062.
+  await interaction.deferReply();
+
   const member = interaction.member instanceof GuildMember ? interaction.member : null;
   const voiceChannel = member?.voice.channel as VoiceChannel | null;
 
   if (!voiceChannel) {
-    await interaction.reply({ content: '❌ Join a voice channel first!', flags: MessageFlags.Ephemeral });
+    await interaction.editReply({ content: '❌ Join a voice channel first!' });
     return;
   }
-
-  await interaction.deferReply();
 
   // Extract URL or use the entire message content as a search query
   const msgContent = interaction.targetMessage.content;

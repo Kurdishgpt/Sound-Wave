@@ -54,18 +54,17 @@ export async function autocomplete(interaction: AutocompleteInteraction): Promis
 }
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+  // Defer immediately — Discord's 3-second acknowledgement window starts the
+  // moment the interaction arrives. Any work before deferReply risks 10062.
+  await interaction.deferReply();
+
   const member = interaction.member as GuildMember;
   const voiceChannel = member.voice.channel as VoiceChannel | null;
 
   if (!voiceChannel) {
-    await interaction.reply({
-      content: '❌ You need to be in a voice channel first!',
-      flags: MessageFlags.Ephemeral,
-    });
+    await interaction.editReply({ content: '❌ You need to be in a voice channel first!' });
     return;
   }
-
-  await interaction.deferReply();
 
   const query = interaction.options.getString('query', true);
   const player = getPlayer(interaction.guildId!);
