@@ -4,16 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node --require ./src/patches/udpPatch.cjs --import tsx/esm src/index.ts",
+    "start": "node --import tsx/esm src/index.ts",
     "dev": "tsx watch src/index.ts",
     "deploy": "tsx src/deploy.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@discordjs/rest": "^2.4.3",
-    "@discordjs/voice": "^0.17.0",
+    "@discordjs/voice": "^0.19.2",
     "@distube/ytdl-core": "^4.16.12",
-    "discord-api-types": "^0.37.119",
+    "discord-api-types": "^0.38.41",
     "discord.js": "^14.16.3",
     "ffmpeg-static": "^5.2.0",
     "opusscript": "^0.0.8",

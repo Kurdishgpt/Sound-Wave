@@ -143,11 +143,8 @@ export class MusicPlayer {
       this.connection = joinVoiceChannel({
         channelId: channel.id,
         guildId: this.guildId,
-        // discord.js ships discord-api-types@0.37 while @discordjs/voice expects 0.38;
-        // cast is safe at runtime — the adapter shape is compatible.
         adapterCreator: channel.guild.voiceAdapterCreator as unknown as DiscordGatewayAdapterCreator,
         selfDeaf: false,
-        debug: true,
       });
 
       this.connection.on(VoiceConnectionStatus.Disconnected, async () => {
@@ -169,9 +166,6 @@ export class MusicPlayer {
         console.log(`[MusicPlayer] Voice connection state: ${oldState.status} -> ${newState.status}`);
       });
 
-      this.connection.on('debug', msg => {
-        console.log(`[VoiceDebug] ${msg}`);
-      });
     }
 
     // Wait until the connection is actually Ready before returning — otherwise
