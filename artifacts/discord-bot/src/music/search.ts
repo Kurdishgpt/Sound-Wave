@@ -152,17 +152,17 @@ export function getAudioStream(url: string): { stream: Readable; type: StreamTyp
   // Strictly request WebM/Opus — @discordjs/voice decodes this natively (no ffmpeg needed).
   // No generic "bestaudio" fallback: a non-WebM/Opus fallback would silently mismatch the
   // declared StreamType.WebmOpus and fail to decode.
+  // tv_embedded is a smart-TV/embedded client that doesn't require a signed-in
+  // session or PO token, which lets it bypass YouTube's server-IP bot gate.
+  // mweb (mobile web) is the secondary fallback; both avoid the 403/sign-in wall
+  // that blocks the standard web/android/ios clients from headless server IPs.
   const proc = spawn(YOUTUBE_DL_PATH, [
     url,
     '--no-playlist',
-    // YouTube now requires a PO token for most webm/opus and android/ios formats;
-    // without one they 403 or get skipped. Format 18 (muxed mp4/h264+aac) from the
-    // web client is still available without a PO token, so fall back to "best" and
-    // let ffmpeg (via @discordjs/voice's Arbitrary stream type) demux/transcode it.
     '-f', 'bestaudio/best',
-    '--extractor-args', 'youtube:player_client=web,android,ios',
+    '--extractor-args', 'youtube:player_client=tv_embedded,mweb',
     '--no-warnings',
-    '-o', '-',   // pipe to stdout
+    '-o', '-',
     '--quiet',
   ]);
 
