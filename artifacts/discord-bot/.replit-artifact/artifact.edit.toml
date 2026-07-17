@@ -10,4 +10,4 @@ name = "Discord Bot"
 run = "pnpm --filter @workspace/discord-bot run dev"
 
 [services.production.run]
-args = ["node", "--import", "tsx/esm", "artifacts/discord-bot/src/index.ts"]
+args = ["node", "--require", "artifacts/discord-bot/src/patches/udpPatch.cjs", "--import", "tsx/esm", "artifacts/discord-bot/src/index.ts"]
