@@ -3,6 +3,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { StreamType } from '@discordjs/voice';
 import { fileURLToPath } from 'url';
 import { resolve, dirname } from 'path';
+import { writeFileSync, existsSync } from 'fs';
 import type { Readable } from 'stream';
 import type { Track } from '../types.js';
 
@@ -10,6 +11,25 @@ import type { Track } from '../types.js';
 // returns real audio formats on server IPs where tv_embedded/mweb are blocked).
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const YOUTUBE_DL_PATH = resolve(__dirname, '../../bin/yt-dlp');
+
+// ── YouTube cookies ───────────────────────────────────────────────────────────
+// Some videos require authentication to bypass bot-detection. Set YOUTUBE_COOKIES
+// to a base64-encoded Netscape cookies.txt exported from your browser.
+const COOKIES_PATH = '/tmp/yt-cookies.txt';
+
+function initCookies(): void {
+  const raw = process.env.YOUTUBE_COOKIES;
+  if (!raw) return;
+  try {
+    const decoded = Buffer.from(raw, 'base64').toString('utf-8');
+    writeFileSync(COOKIES_PATH, decoded, { mode: 0o600 });
+    console.log('[yt-dlp] Cookies loaded from YOUTUBE_COOKIES secret');
+  } catch (err) {
+    console.warn('[yt-dlp] Failed to write cookies file:', (err as Error).message);
+  }
+}
+
+initCookies();
 
 function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -156,14 +176,21 @@ export function getAudioStream(url: string): { stream: Readable; type: StreamTyp
   // where tv_embedded and mweb are fully blocked (no audio formats returned).
   // Prefer format 251 (opus 129k) → 249 (opus 46k) → any webm/opus → bestaudio.
   // WebmOpus is decoded natively by @discordjs/voice — no ffmpeg needed.
-  const proc = spawn(YOUTUBE_DL_PATH, [
+  const args = [
     url,
     '--no-playlist',
     '-f', '251/249/bestaudio[ext=webm]/bestaudio',
     '--no-warnings',
     '-o', '-',
     '--quiet',
-  ]);
+  ];
+
+  // Pass cookies if available — required for videos that trigger bot-detection
+  if (existsSync(COOKIES_PATH)) {
+    args.splice(1, 0, '--cookies', COOKIES_PATH);
+  }
+
+  const proc = spawn(YOUTUBE_DL_PATH, args);
 
   proc.on('error', (err) => {
     console.error('[yt-dlp] Failed to spawn process:', err.message);
