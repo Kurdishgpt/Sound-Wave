@@ -1,0 +1,13 @@
+kind = "worker"
+title = "Discord Bot"
+version = "1.0.0"
+id = "ZvrMTirLXd4_z1tsFXb7"
+
+[[services]]
+name = "Discord Bot"
+
+[services.development]
+run = "pnpm --filter @workspace/discord-bot run dev"
+
+[services.production.run]
+args = ["node", "--import", "tsx/esm", "artifacts/discord-bot/src/index.ts"]
