@@ -19,12 +19,12 @@ export function buildControlRows(
     ? player.likedTracks.has(player.currentTrack.url)
     : false;
 
-  const loopEmoji =
-    loopMode === LoopMode.TRACK ? '🔂' : loopMode === LoopMode.QUEUE ? '🔁' : '➡️';
+  const loopEmoji = loopMode === LoopMode.TRACK ? '🔂' : '🔁';
   const loopStyle =
-    loopMode !== LoopMode.NONE ? ButtonStyle.Success : ButtonStyle.Secondary;
+    loopMode !== LoopMode.NONE ? ButtonStyle.Primary : ButtonStyle.Secondary;
 
-  // Row 1: Suggest + transport
+  // ── Row 1: Suggest + Queue (2 buttons — 1 visual line on mobile) ────────────
+  // The suggest label is wide; the queue icon sits at the far right.
   const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId('music_suggest')
@@ -32,13 +32,29 @@ export function buildControlRows(
       .setEmoji('🎵')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
+      .setCustomId('music_queue_btn')
+      .setEmoji('📋')
+      .setStyle(ButtonStyle.Secondary),
+  );
+
+  // ── Row 2: Transport (5 buttons — mobile wraps 4+1, so 🔁 sits alone) ───────
+  // ▶ and ⏸ are always shown; the inactive one is disabled (grayed out),
+  // matching the reference layout of [▶][⏮][⏸][⏭] with [🔁] wrapping alone.
+  const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('music_resume')
+      .setEmoji('▶️')
+      .setStyle(isPaused ? ButtonStyle.Primary : ButtonStyle.Secondary)
+      .setDisabled(!isPaused),
+    new ButtonBuilder()
       .setCustomId('music_prev')
       .setEmoji('⏮')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
-      .setCustomId(isPaused ? 'music_resume' : 'music_pause')
-      .setEmoji(isPaused ? '▶️' : '⏸')
-      .setStyle(ButtonStyle.Primary),
+      .setCustomId('music_pause')
+      .setEmoji('⏸')
+      .setStyle(!isPaused ? ButtonStyle.Primary : ButtonStyle.Secondary)
+      .setDisabled(isPaused),
     new ButtonBuilder()
       .setCustomId('music_skip')
       .setEmoji('⏭')
@@ -49,49 +65,53 @@ export function buildControlRows(
       .setStyle(loopStyle),
   );
 
-  // Row 2: Volume & seek
-  const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId('music_vol_down')
-      .setEmoji('🔉')
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId('music_rewind')
-      .setEmoji('⏪')
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(true), // seek not supported by play-dl streams
-    new ButtonBuilder()
-      .setCustomId('music_like')
-      .setEmoji('❤️')
-      .setStyle(isLiked ? ButtonStyle.Danger : ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId('music_forward')
-      .setEmoji('⏩')
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(true), // seek not supported by play-dl streams
-    new ButtonBuilder()
-      .setCustomId('music_vol_up')
-      .setEmoji('🔊')
-      .setStyle(ButtonStyle.Secondary),
-  );
-
-  // Row 3: Advanced
+  // ── Row 3: Seek & like (4 buttons — 1 visual line on mobile) ───────────────
   const row3 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId('music_mute')
       .setEmoji(isMuted ? '🔇' : '🔈')
       .setStyle(isMuted ? ButtonStyle.Danger : ButtonStyle.Secondary),
     new ButtonBuilder()
+      .setCustomId('music_rewind')
+      .setEmoji('⏪')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(true),
+    new ButtonBuilder()
+      .setCustomId('music_like')
+      .setEmoji(isLiked ? '❤️' : '🤍')
+      .setStyle(isLiked ? ButtonStyle.Danger : ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('music_forward')
+      .setEmoji('⏩')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(true),
+  );
+
+  // ── Row 4: Volume down alone ────────────────────────────────────────────────
+  const row4 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('music_vol_down')
+      .setEmoji('🔉')
+      .setStyle(ButtonStyle.Secondary),
+  );
+
+  // ── Row 5: Utility (5 buttons — mobile wraps 4+1, so 🔌 sits alone) ────────
+  const row5 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('music_vol_up')
+      .setEmoji('🔊')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
       .setCustomId('music_shuffle')
       .setEmoji('🔀')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('music_stop')
-      .setEmoji('⏹')
+      .setEmoji('✖️')
       .setStyle(ButtonStyle.Danger),
     new ButtonBuilder()
-      .setCustomId('music_queue_btn')
-      .setEmoji('📋')
+      .setCustomId('music_vol_down2')
+      .setEmoji('🔉')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('music_disconnect')
@@ -99,7 +119,7 @@ export function buildControlRows(
       .setStyle(ButtonStyle.Secondary),
   );
 
-  return [row1, row2, row3];
+  return [row1, row2, row3, row4, row5];
 }
 
 export function buildSuggestionSelect(

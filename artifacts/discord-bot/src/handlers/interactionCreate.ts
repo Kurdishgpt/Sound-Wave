@@ -162,7 +162,8 @@ async function handleButton(interaction: ButtonInteraction): Promise<void> {
         break;
       }
 
-      case 'music_vol_down': {
+      case 'music_vol_down':
+      case 'music_vol_down2': {
         player.adjustVolume(-10);
         await interaction.reply({ content: `🔉 Volume: **${player.volume}%**`, flags: MessageFlags.Ephemeral });
         await player.refreshMessage();
