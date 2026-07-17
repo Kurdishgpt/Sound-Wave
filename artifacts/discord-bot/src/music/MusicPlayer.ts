@@ -147,6 +147,7 @@ export class MusicPlayer {
         // cast is safe at runtime — the adapter shape is compatible.
         adapterCreator: channel.guild.voiceAdapterCreator as unknown as DiscordGatewayAdapterCreator,
         selfDeaf: false,
+        debug: true,
       });
 
       this.connection.on(VoiceConnectionStatus.Disconnected, async () => {
@@ -166,6 +167,10 @@ export class MusicPlayer {
 
       this.connection.on('stateChange', (oldState, newState) => {
         console.log(`[MusicPlayer] Voice connection state: ${oldState.status} -> ${newState.status}`);
+      });
+
+      this.connection.on('debug', msg => {
+        console.log(`[VoiceDebug] ${msg}`);
       });
     }
 
