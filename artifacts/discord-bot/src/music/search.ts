@@ -1,13 +1,15 @@
 import play from 'play-dl';
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { StreamType } from '@discordjs/voice';
-import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+import { resolve, dirname } from 'path';
 import type { Readable } from 'stream';
 import type { Track } from '../types.js';
 
-const require = createRequire(import.meta.url);
-// Resolve the yt-dlp binary path via yt-dlp-exec's constants module
-const { YOUTUBE_DL_PATH } = require('yt-dlp-exec/src/constants') as { YOUTUBE_DL_PATH: string };
+// Use the bundled yt-dlp binary (android_vr client — no PO token required,
+// returns real audio formats on server IPs where tv_embedded/mweb are blocked).
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const YOUTUBE_DL_PATH = resolve(__dirname, '../../bin/yt-dlp');
 
 function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -149,18 +151,15 @@ export async function getSuggestions(track: Track): Promise<Track[]> {
 }
 
 export function getAudioStream(url: string): { stream: Readable; type: StreamType; process: ChildProcessWithoutNullStreams } {
-  // Strictly request WebM/Opus — @discordjs/voice decodes this natively (no ffmpeg needed).
-  // No generic "bestaudio" fallback: a non-WebM/Opus fallback would silently mismatch the
-  // declared StreamType.WebmOpus and fail to decode.
-  // tv_embedded is a smart-TV/embedded client that doesn't require a signed-in
-  // session or PO token, which lets it bypass YouTube's server-IP bot gate.
-  // mweb (mobile web) is the secondary fallback; both avoid the 403/sign-in wall
-  // that blocks the standard web/android/ios clients from headless server IPs.
+  // Use the bundled yt-dlp binary which defaults to the android_vr client.
+  // android_vr returns real audio formats (251/249 webm/opus) on server IPs
+  // where tv_embedded and mweb are fully blocked (no audio formats returned).
+  // Prefer format 251 (opus 129k) → 249 (opus 46k) → any webm/opus → bestaudio.
+  // WebmOpus is decoded natively by @discordjs/voice — no ffmpeg needed.
   const proc = spawn(YOUTUBE_DL_PATH, [
     url,
     '--no-playlist',
-    '-f', 'bestaudio/best',
-    '--extractor-args', 'youtube:player_client=tv_embedded,mweb',
+    '-f', '251/249/bestaudio[ext=webm]/bestaudio',
     '--no-warnings',
     '-o', '-',
     '--quiet',
@@ -179,5 +178,5 @@ export function getAudioStream(url: string): { stream: Readable; type: StreamTyp
   // Silence EPIPE on the readable side as well (expected on manual stop/skip).
   proc.stdout.on('error', () => {});
 
-  return { stream: proc.stdout, type: StreamType.Arbitrary, process: proc };
+  return { stream: proc.stdout, type: StreamType.WebmOpus, process: proc };
 }

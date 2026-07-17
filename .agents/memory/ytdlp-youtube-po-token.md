@@ -1,37 +1,32 @@
 ---
 name: yt-dlp YouTube PO token / 403 issue
-description: YouTube blocks most yt-dlp audio formats (webm/opus, android/ios client formats) with 403 unless a PO token is supplied; workaround is to fall back to the web client's muxed format and transcode with ffmpeg.
+description: YouTube blocks most yt-dlp audio formats on server IPs unless the android_vr client is used; bundled bin/yt-dlp defaults to android_vr which returns real opus formats without a PO token.
 ---
 
 ## Problem
-As of mid-2026, YouTube requires a "PO token" (proof-of-origin token) for most
-adaptive audio-only formats (webm/opus, and android/ios client formats) served
-via yt-dlp. Without one, yt-dlp either:
-- Returns `HTTP Error 403: Forbidden` when requesting `bestaudio[ext=webm][acodec=opus]`, or
-- Silently skips android/ios formats with a warning and then fails with
-  "Requested format is not available" if no other format matches.
+As of mid-2026, YouTube requires a "PO token" for most adaptive audio-only formats
+on headless server IPs. Several client workarounds have been tried over time:
 
-Generating a real PO token requires a browser-based token provider plugin
-(e.g. bgutil-ytdlp-pot-provider) — extra infra not worth it for a simple bot.
+- `tv_embedded,mweb` — **broken**: returns only storyboard formats (no audio) on this server IP
+- `web,android,ios` — **broken**: format 18 not available, others need PO token
+- `android_vr` — **works**: returns real opus formats (251/249 webm/opus) without a PO token
 
-## Working fix
-- Format selector: `bestaudio/best` with `--extractor-args youtube:player_client=web,android,ios`.
-  This lets yt-dlp fall back to the **web client's muxed format** (typically
-  format `18`: mp4/h264 video + AAC audio) which does NOT require a PO token.
-- Since format 18 is muxed video+audio (not pure webm/opus), the discord bot
-  must use `StreamType.Arbitrary` (not `StreamType.WebmOpus`) so
-  `@discordjs/voice` pipes it through ffmpeg to demux/transcode to Opus.
-  This requires ffmpeg to be installed as a system dependency and on PATH.
+## Working fix (as of July 2026)
+Use the bundled `bin/yt-dlp` binary in `artifacts/discord-bot/bin/yt-dlp`.
+It defaults to `android_vr` client and returns formats 251 (opus 129k) and 249 (opus 46k).
 
-## Why
-YouTube's anti-bot PO token requirement rolled out broadly to adaptive
-formats; muxed legacy formats (like 18) are still served without it, at the
-cost of higher bandwidth (video track wasted) and needing ffmpeg to extract
-audio instead of piping raw Opus natively.
+Format selector: `251/249/bestaudio[ext=webm]/bestaudio`
+StreamType: `StreamType.WebmOpus` — @discordjs/voice decodes this natively, no ffmpeg needed.
+
+**Do NOT pass `--extractor-args youtube:player_client=...`** when using the bundled binary —
+android_vr is the default and adding other clients breaks the format list.
+
+## Why the bundled binary
+The `yt-dlp-exec` npm package binary is the same version but its cached format selection
+and default client may differ. The bundled `bin/yt-dlp` has been tested to work on this
+server IP with android_vr. Both are version 2026.07.04.
 
 ## How to apply
-If yt-dlp-based YouTube audio starts failing again with 403 or "format not
-available" errors, check this format fallback + extractor-args combination
-first before assuming yt-dlp itself is broken — it's usually YouTube tightening
-PO token enforcement, not a yt-dlp bug. Keep yt-dlp updated (`yt-dlp-exec`
-downloads a fresh binary) since format availability shifts over time.
+If YouTube audio breaks again: test `bin/yt-dlp --list-formats <url>` with no
+`--extractor-args` first. If android_vr stops working, try `android_embed` or
+`android_testsuite`. Format availability shifts — keep yt-dlp updated.

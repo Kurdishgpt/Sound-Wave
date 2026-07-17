@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node --import tsx/esm src/index.ts",
+    "start": "node --require ./src/patches/udpPatch.cjs --import tsx/esm src/index.ts",
     "dev": "tsx watch src/index.ts",
     "deploy": "tsx src/deploy.ts",
     "typecheck": "tsc --noEmit"
