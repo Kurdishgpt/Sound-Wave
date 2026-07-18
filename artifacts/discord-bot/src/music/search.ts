@@ -198,7 +198,11 @@ export function getAudioStream(url: string): { stream: Readable; type: StreamTyp
   const args = [
     url,
     '--no-playlist',
-    '-f', '251/249/bestaudio[ext=webm]/bestaudio',
+    // Prefer highest-bitrate Opus formats (251=160kbps, 250=70kbps, 249=50kbps).
+    // Fall back to any webm/opus, then best audio available.
+    '-f', '251/250/249/bestaudio[acodec=opus]/bestaudio[ext=webm]/bestaudio',
+    // Use highest quality FFmpeg post-processing (VBR mode, slowest encoder preset).
+    '--audio-quality', '0',
     '--no-warnings',
     '-o', '-',
     '--quiet',

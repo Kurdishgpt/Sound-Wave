@@ -144,7 +144,8 @@ export class MusicPlayer {
         channelId: channel.id,
         guildId: this.guildId,
         adapterCreator: channel.guild.voiceAdapterCreator as unknown as DiscordGatewayAdapterCreator,
-        selfDeaf: false,
+        // selfDeaf: bot doesn't need to receive audio — saves bandwidth for encoding.
+        selfDeaf: true,
       });
 
       this.connection.on(VoiceConnectionStatus.Disconnected, async () => {
