@@ -190,25 +190,30 @@ export async function getSuggestions(track: Track): Promise<Track[]> {
 }
 
 export function getAudioStream(url: string): { stream: Readable; type: StreamType; process: ChildProcessWithoutNullStreams } {
-  // Use the bundled yt-dlp binary which defaults to the android_vr client.
-  // android_vr returns real audio formats (251/249 webm/opus) on server IPs
-  // where tv_embedded and mweb are fully blocked (no audio formats returned).
-  // Prefer format 251 (opus 129k) → 249 (opus 46k) → any webm/opus → bestaudio.
-  // WebmOpus is decoded natively by @discordjs/voice — no ffmpeg needed.
+  // Use the web player client — the only client that reliably avoids YouTube's
+  // "Sign in to confirm you're not a bot" error on server IPs without a PO token.
+  // android_vr / ios / android clients are now bot-detected by YouTube.
+  //
+  // Format priority:
+  //   251 = webm/opus 160kbps (best)  → needs PO token on some videos
+  //   250 = webm/opus  70kbps
+  //   249 = webm/opus  50kbps
+  //   18  = mp4/aac   128kbps muxed   → no PO token required, universal fallback
+  //
+  // StreamType.Arbitrary routes through FFmpeg, which handles all of these
+  // containers (webm, mp4) and extracts audio regardless of what yt-dlp returns.
   const args = [
     url,
     '--no-playlist',
-    // Prefer highest-bitrate Opus formats (251=160kbps, 250=70kbps, 249=50kbps).
-    // Fall back to any webm/opus, then best audio available.
-    '-f', '251/250/249/bestaudio[acodec=opus]/bestaudio[ext=webm]/bestaudio',
-    // Use highest quality FFmpeg post-processing (VBR mode, slowest encoder preset).
+    '--extractor-args', 'youtube:player_client=web',
+    '-f', '251/250/249/bestaudio[ext=webm]/18/bestaudio',
     '--audio-quality', '0',
     '--no-warnings',
     '-o', '-',
     '--quiet',
   ];
 
-  // Pass cookies if available — required for videos that trigger bot-detection
+  // Pass cookies if available — further reduces bot-detection risk.
   if (cookiesReady) {
     args.splice(1, 0, '--cookies', COOKIES_PATH);
   }
