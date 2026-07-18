@@ -37,6 +37,8 @@ export class MusicPlayer {
   private ytdlpProcess: ReturnType<typeof import('child_process').spawn> | null = null;
   /** Monotonic counter guarding against stale async playTrack() completions overriding newer playback. */
   private playGeneration = 0;
+  /** Last playback error to show in the control message instead of "queue ended". Cleared on new track. */
+  private lastError: string | null = null;
 
   constructor(guildId: string) {
     this.guildId = guildId;
@@ -77,6 +79,7 @@ export class MusicPlayer {
 
   private async playTrack(track: Track): Promise<void> {
     const generation = ++this.playGeneration;
+    this.lastError = null; // clear any previous error on each new play attempt
     try {
       this.currentTrack = track;
       const stream = getAudioStream(track.url);
@@ -93,6 +96,11 @@ export class MusicPlayer {
       stream.process.once('close', code => {
         if (code !== 0 && code !== null) {
           console.error(`[MusicPlayer] yt-dlp exited with code ${code} for "${track.title}"`);
+          // Store the error so refreshMessage() can display it instead of "queue has ended".
+          // Only set it if this track is still the active one (not superseded by a skip).
+          if (generation === this.playGeneration) {
+            this.lastError = `❌ Couldn't play **${track.title}** — YouTube blocked the request. Try a different track or add your cookies via the \`YOUTUBE_COOKIES\` secret.`;
+          }
         }
       });
       this.resource = createAudioResource(stream.stream, {
@@ -105,6 +113,7 @@ export class MusicPlayer {
     } catch (err) {
       if (generation !== this.playGeneration) return; // superseded — ignore
       console.error('[MusicPlayer] Failed to play track:', err);
+      this.lastError = `❌ Couldn't play **${track.title}** — an unexpected error occurred.`;
       this.currentTrack = null;
       this.advanceQueue();
     }
@@ -298,6 +307,14 @@ export class MusicPlayer {
           embeds: [buildNowPlayingEmbed(this.currentTrack, this)],
           components: buildControlRows(this),
         });
+      } else if (this.lastError) {
+        const msg = this.lastError;
+        this.lastError = null;
+        await this.controlMessage.edit({
+          content: msg,
+          embeds: [],
+          components: [],
+        });
       } else {
         await this.controlMessage.edit({
           content: '⏹ The queue has ended.',
@@ -312,6 +329,7 @@ export class MusicPlayer {
 
   destroy(): void {
     this.manualStop = true;
+    this.lastError = null; // clean stop — don't show an error
     this.player.stop(true);
     this.killYtdlp();
     const conn = getVoiceConnection(this.guildId);
