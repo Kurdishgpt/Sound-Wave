@@ -16,7 +16,10 @@ const YOUTUBE_DL_PATH = resolve(__dirname, '../../bin/yt-dlp');
 // Set YOUTUBE_COOKIES to your Netscape cookies.txt content (raw or base64).
 // Export from Chrome/Firefox with the "Get cookies.txt LOCALLY" extension.
 const COOKIES_PATH = '/tmp/yt-cookies.txt';
-let cookiesReady = false;
+// Keep the original cookie content in memory so we can re-write it fresh before
+// every yt-dlp invocation — yt-dlp overwrites the file after each request and
+// wipes auth cookies, so we must restore them ourselves each time.
+let cookiesContent: string | null = null;
 
 function initCookies(): void {
   const raw = process.env.YOUTUBE_COOKIES;
@@ -39,12 +42,20 @@ function initCookies(): void {
     return;
   }
 
+  cookiesContent = content;
+  console.log('[yt-dlp] Cookies loaded from YOUTUBE_COOKIES secret');
+}
+
+/** Write the original cookies fresh to disk before each yt-dlp call.
+ *  Returns true if cookies are available. */
+function refreshCookies(): boolean {
+  if (!cookiesContent) return false;
   try {
-    writeFileSync(COOKIES_PATH, content, { mode: 0o600 });
-    cookiesReady = true;
-    console.log('[yt-dlp] Cookies loaded from YOUTUBE_COOKIES secret');
+    writeFileSync(COOKIES_PATH, cookiesContent, { mode: 0o600 });
+    return true;
   } catch (err) {
     console.warn('[yt-dlp] Failed to write cookies file:', (err as Error).message);
+    return false;
   }
 }
 
@@ -190,22 +201,20 @@ export async function getSuggestions(track: Track): Promise<Track[]> {
 }
 
 export function getAudioStream(url: string): { stream: Readable; type: StreamType; process: ChildProcessWithoutNullStreams } {
-  // Use the web player client — the only client that reliably avoids YouTube's
-  // "Sign in to confirm you're not a bot" error on server IPs without a PO token.
-  // android_vr / ios / android clients are now bot-detected by YouTube.
+  // android_vr client (default) + fresh cookies per request is the most reliable
+  // combination on server IPs. The web client lacks a JS runtime for challenge
+  // solving and returns only storyboard images; android_vr bypasses that.
   //
   // Format priority:
-  //   251 = webm/opus 160kbps (best)  → needs PO token on some videos
+  //   251 = webm/opus 160kbps (best quality)
   //   250 = webm/opus  70kbps
   //   249 = webm/opus  50kbps
-  //   18  = mp4/aac   128kbps muxed   → no PO token required, universal fallback
+  //   18  = mp4/aac   128kbps muxed — universal fallback, no challenge needed
   //
-  // StreamType.Arbitrary routes through FFmpeg, which handles all of these
-  // containers (webm, mp4) and extracts audio regardless of what yt-dlp returns.
+  // StreamType.Arbitrary routes through FFmpeg, which handles webm, mp4, m4a.
   const args = [
     url,
     '--no-playlist',
-    '--extractor-args', 'youtube:player_client=web',
     '-f', '251/250/249/bestaudio[ext=webm]/18/bestaudio',
     '--audio-quality', '0',
     '--no-warnings',
@@ -213,8 +222,9 @@ export function getAudioStream(url: string): { stream: Readable; type: StreamTyp
     '--quiet',
   ];
 
-  // Pass cookies if available — further reduces bot-detection risk.
-  if (cookiesReady) {
+  // Re-write the original cookies fresh before every spawn — yt-dlp overwrites
+  // the file after each request and strips auth cookies, so we must restore them.
+  if (refreshCookies()) {
     args.splice(1, 0, '--cookies', COOKIES_PATH);
   }
 
